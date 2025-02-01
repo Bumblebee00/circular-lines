@@ -43,20 +43,19 @@ class Pen {
   }
 
   updateHeadDir() {
-    let delta_total = 0;
+    let delta_total = (noise(0.05 * frameCount)-0.5)*10;
+    console.log(delta_total);
     for (let i = 0; i < this.obstacles.length; i++) {
       let x = this.obstacles[i].minDistToSegment(this.head_pos);
-      let f = 2;
-      let b = (50 - 20*f)/(f-1);
-      let a = 50 + b;
-      delta_total += a / (x + b);
+      let s = i%2 == 0 ? 1 : -1;
+      delta_total += s*100/ (x + 1);
     }
 
-    if (delta_total < 1 && millis() - this.time_last_changed_dir > 3000){
-      this.ang_dir = -this.ang_dir;
-      this.time_last_changed_dir = millis();
-      console.log("changed direction");
-    }
+    // if (delta_total < 1 && millis() - this.time_last_changed_dir > 3000){
+    //   this.ang_dir = -this.ang_dir;
+    //   this.time_last_changed_dir = millis();
+    //   console.log("changed direction");
+    // }
     this.head_dir += this.ang_dir * delta_total;
   }
 
