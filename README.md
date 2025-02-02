@@ -1,1 +1,1 @@
-for now simply the arrok draws strange patterns
+for now simply the arrow draws strange patterns
