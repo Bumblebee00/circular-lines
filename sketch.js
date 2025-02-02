@@ -20,8 +20,8 @@ function find_maxmin(arr) {
 }
 
 function potential(point, source){
-  let r = distance(point, source)/50;
-  return -5*r*exp(-2*r);
+  let r = distance(point, source)/20;
+  return -5*(r**2)*exp(-2.5*r);
 }
 
 class SegmentObstacle {
@@ -53,27 +53,35 @@ class Pen {
   constructor(startingPos, startingSpeed, startingDir) {
     this.head_pos = startingPos; // pixels
     this.head_dir = startingDir; // degrees. 0 is right and then counter-clockwise
-    this.ang_dir = 1; // 1 or -1
-    this.time_last_changed_dir = millis();
-    this.head_speed = startingSpeed; // pixels per frame
+    
+    this.head_speed = 1.; // pixels per frame
+    this.turning_speed = 5.; // degrees per frame
+    
+    this.lookahead_dist = 10.;
+    this.lookahead_turn = 60.;
+    
     this.points = [startingPos]; // array of points that the pen has drawn
   }
 
-  updatePen(obstacles) {
-    let delta_total = (noise(0.05 * frameCount)-0.5)*10;
-    for (let i = 0; i < obstacles.length; i++) {
-      let x = obstacles[i].minDistToSegment(this.head_pos);
-      let s = i%2 == 0 ? 1 : -1;
-      delta_total += s*100/ (x + 1);
+  updatePen(potential_map) {
+    // check the potential values at distance head_speed and angel +10, 0, -10 degrees from the pen head
+    let pots = [];
+    let n = 5;
+    for (let d = -this.lookahead_turn; d <= this.lookahead_turn; d += this.lookahead_turn*2/n) {
+      let p = { // point to look at
+        x: this.head_pos.x + this.lookahead_dist*cos(this.head_dir + d),
+        y: this.head_pos.y + this.lookahead_dist*sin(this.head_dir + d)
+      };
+      
+      let x = floor(p.x/scale); let y = floor(p.y/scale);
+      if (x >= 0 && x < width/scale && y >= 0 && y < height/scale) {
+        pots.push(potential_map[x][y]);
+      } else { pots.push(Infinity); }
     }
-
-    // if (delta_total < 1 && millis() - this.time_last_changed_dir > 3000){
-    //   this.ang_dir = -this.ang_dir;
-    //   this.time_last_changed_dir = millis();
-    //   console.log("changed direction");
-    // }
-    this.head_dir += this.ang_dir * delta_total;
-
+    // then go to the minimum potential value
+    print(pots);
+  
+    this.head_dir += map(pots.indexOf(min(pots)), 0, n, -this.turning_speed, this.turning_speed);
     // update head position
     this.head_pos.x += this.head_speed * cos(this.head_dir);
     this.head_pos.y += this.head_speed * sin(this.head_dir);
@@ -99,9 +107,17 @@ class Pen {
   }
 }
 
+
+
+
+
+
+
+
+
 let pen; // the pen object
 let obstacles = []; // array of obstacles
-let scale = 5; // scale of the potential map
+let scale = 3; // scale of the potential map
 let potential_map = []; // 2d array of potential values (one value every scale pixels)
 
 function setup() {
@@ -139,8 +155,9 @@ function setup() {
 }
 
 function draw() {
+  frameRate(60);
   // ============ Update
-  pen.updatePen(obstacles);
+  pen.updatePen(potential_map);
   
   // ============ Draw
   // draw potential map
@@ -158,5 +175,5 @@ function draw() {
   // draw pen
   pen.drawPen();
   // draw obstacles
-  for (let i = 0; i < obstacles.length; i++) { obstacles[i].draw(); }
+  // for (let i = 0; i < obstacles.length; i++) { obstacles[i].draw(); }
 }
