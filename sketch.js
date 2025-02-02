@@ -16,12 +16,16 @@ function find_maxmin(arr) {
       if (arr[i][j] < min) { min = arr[i][j]; }
     }
   }
+  if (abs(min-max)<=0.1) { max = min + 1; }
   return {max: max, min: min};
 }
 
 function potential(point, source){
+  let a = 1;
   let r = distance(point, source)/20;
-  return -5*(r**2)*exp(-2.5*r);
+  // return -50*((r-1)**2)*exp(-(r-1)/a)/(a**2)
+  if (r>1 && r<2) { return -1; }
+  else { return 0; }
 }
 
 class SegmentObstacle {
@@ -50,27 +54,27 @@ class SegmentObstacle {
 }
 
 class Pen {
-  constructor(startingPos, startingSpeed, startingDir) {
+  constructor(startingPos, startingDir, forwardSpeed, turning_speed, forward_lookahead, turning_lookahead) {
     this.head_pos = startingPos; // pixels
     this.head_dir = startingDir; // degrees. 0 is right and then counter-clockwise
     
-    this.head_speed = 1.; // pixels per frame
-    this.turning_speed = 5.; // degrees per frame
+    this.forwardSpeed = forwardSpeed; // pixels per frame
+    this.turning_speed = turning_speed; // degrees per frame
     
-    this.lookahead_dist = 10.;
-    this.lookahead_turn = 60.;
+    this.forward_lookahead = forward_lookahead;
+    this.turning_lookahead = turning_lookahead;
     
-    this.points = [startingPos]; // array of points that the pen has drawn
+    this.points = [startingPos];
   }
 
   updatePen(potential_map) {
     // check the potential values at distance head_speed and angel +10, 0, -10 degrees from the pen head
     let pots = [];
     let n = 5;
-    for (let d = -this.lookahead_turn; d <= this.lookahead_turn; d += this.lookahead_turn*2/n) {
+    for (let d = -this.turning_lookahead; d <= this.turning_lookahead; d += this.turning_lookahead*2/n) {
       let p = { // point to look at
-        x: this.head_pos.x + this.lookahead_dist*cos(this.head_dir + d),
-        y: this.head_pos.y + this.lookahead_dist*sin(this.head_dir + d)
+        x: this.head_pos.x + this.forward_lookahead*cos(this.head_dir + d),
+        y: this.head_pos.y + this.forward_lookahead*sin(this.head_dir + d)
       };
       
       let x = floor(p.x/scale); let y = floor(p.y/scale);
@@ -79,12 +83,16 @@ class Pen {
       } else { pots.push(Infinity); }
     }
     // then go to the minimum potential value
-    print(pots);
-  
-    this.head_dir += map(pots.indexOf(min(pots)), 0, n, -this.turning_speed, this.turning_speed);
+    let maxmin = find_maxmin(pots);
+    if (maxmin.min - maxmin.max != 0) {
+      this.head_dir += map(pots.indexOf(min(pots)), 0, n, -this.turning_speed, this.turning_speed);
+    } else {
+      this.head_dir += random(-this.turning_speed, this.turning_speed-2);
+    }
+    // this.head_dir += map(pots.indexOf(min(pots)), 0, n, -this.turning_speed, this.turning_speed);
     // update head position
-    this.head_pos.x += this.head_speed * cos(this.head_dir);
-    this.head_pos.y += this.head_speed * sin(this.head_dir);
+    this.head_pos.x += this.forwardSpeed * cos(this.head_dir);
+    this.head_pos.y += this.forwardSpeed * sin(this.head_dir);
     // add new head position to points array
     this.points.push({x: this.head_pos.x, y: this.head_pos.y});
   }
@@ -117,18 +125,22 @@ class Pen {
 
 let pen; // the pen object
 let obstacles = []; // array of obstacles
-let scale = 3; // scale of the potential map
+let scale = 5; // scale of the potential map
 let potential_map = []; // 2d array of potential values (one value every scale pixels)
 
 function setup() {
   createCanvas(400, 400);
   angleMode(DEGREES);
-  let obstacle1 = new SegmentObstacle({x: 300, y: 100}, {x: 300, y: 300});
+  pen = new Pen({x: 200, y: 200}, 0.0, 1.0, 10.0, 10.0, 40.0);
+
+  let obstacle1 = new SegmentObstacle({x: 350, y: 100}, {x: 300, y: 300});
   let obstacle2 = new SegmentObstacle({x: 100, y: 300}, {x: 300, y: 300});
-  let obstacle3 = new SegmentObstacle({x: 100, y: 100}, {x: 100, y: 300});
-  let obstacle4 = new SegmentObstacle({x: 100, y: 100}, {x: 300, y: 100});
-  obstacles = [obstacle1, obstacle2, obstacle3, obstacle4];
-  pen = new Pen({x: 200, y: 200}, 1, 0);
+  let obstacle3 = new SegmentObstacle({x: 100, y: 50}, {x: 300, y: 100});
+  let obstacle4 = new SegmentObstacle({x: 100, y: 50}, {x: 100, y: 300});
+  let obstacle5 = new SegmentObstacle({x: 50, y: 50},{x: 50, y: 50} );
+  obstacles = [obstacle1, obstacle2, obstacle3, obstacle4, obstacle5];
+  // obstacles = [];
+  
   // create a empty potential map
   for (let i = 0; i < width/scale; i++) {
     potential_map.push([]);
@@ -146,7 +158,7 @@ function setup() {
         let source = {x: map(k, 0, obstacle_step_size, obstacles[n].p1.x, obstacles[n].p2.x), y: map(k, 0, obstacle_step_size, obstacles[n].p1.y, obstacles[n].p2.y)};
         let p = {x: i*scale, y: j*scale};
         potential_map[i][j] += potential(p, source);
-      }
+       }
       }
     }
   }
@@ -154,10 +166,30 @@ function setup() {
   print(potential_map);
 }
 
+
+let n_iters = 1;
+let currenti = 0;
+
 function draw() {
+  n_iters ++;
   frameRate(60);
   // ============ Update
+  // update pen
   pen.updatePen(potential_map);
+  // // update potential
+  // if (n_iters % 120 == 0) {
+  //   for (let i = 0; i < width/scale; i++) {
+  //     for (let j = 0; j < height/scale; j++) {
+  //       // loop over 1 every ten points of the pen track
+  //       for (let n = currenti; n < pen.points.length; n+=10) {
+  //         let p = {x: i*scale, y: j*scale};
+  //         potential_map[i][j] += potential(p, pen.points[n]);
+  //       }
+  //     }
+  //   }
+  //   print(potential_map);
+  //   currenti = pen.points.length;
+  // }
   
   // ============ Draw
   // draw potential map
