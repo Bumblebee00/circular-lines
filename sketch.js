@@ -98,7 +98,8 @@ class Pen {
     this.turning_lookahead = turning_lookahead; // degrees
 
     this.desired_dist = 5;
-    this.happines = 100;
+    this.happines_max = 50;
+    this.happines = this.happines_max;
     this.n_teletrasport_alowed = 10;
     
     this.points = [];
@@ -119,49 +120,52 @@ class Pen {
     return mindist;
   }
   
-    updatePen(obstacles) {
-      this.desired_dist = 5 + noise(this.head_pos.x/20, this.head_pos.y/20)*4;
-      print(this.desired_dist);
-      // check the potential values at distance head_speed and angel +10, 0, -10 degrees from the pen head
-      let mindist = Infinity;
-      let mindist_dir = random(-this.turning_lookahead, this.turning_lookahead);
-      let n = 20;
-      for (let d = -this.turning_lookahead; d <= this.turning_lookahead; d += this.turning_lookahead*2/n) {
-        let p = { // point to look at
-          x: this.head_pos.x + this.forward_lookahead*cos(this.head_dir + d),
-          y: this.head_pos.y + this.forward_lookahead*sin(this.head_dir + d)
-        };
+  updatePen(obstacles) {
+    this.desired_dist = 5 + noise(this.head_pos.x/20, this.head_pos.y/20)*4;
 
-        let tmp = abs(this.distance_to_closest_point(p, obstacles)-this.desired_dist);
-        if (tmp < mindist) {
-          mindist = tmp;
-          mindist_dir = d;
-        }
-      }
-      // then go to the distance closer to this.desired_dist
-      this.head_dir += mindist_dir;
-      // update head position
-      this.head_pos.x += this.forwardSpeed * cos(this.head_dir);
-      this.head_pos.y += this.forwardSpeed * sin(this.head_dir);
-      // check if the pen is happy
-      if (mindist > 1) { this.happines -= 1; }
-      if (this.happines <= 0) {
-        if (this.n_teletrasport_alowed > 0) {
-          this.head_pos = {x: random(20, width-20), y: random(20, height-20)};
-          this.head_dir = random(0, 360);
-          this.happines = 100;
-          this.n_teletrasport_alowed -= 1;
-        } else {
-          go = false;
-        }
-      }
-      // add new head position to points array
-      this.latest_points.push({x: this.head_pos.x, y: this.head_pos.y});
-      // when this.latest_points has more than 200 points, remove the oldest one and put it in this.points
-      if (this.latest_points.length > 10) {
-        this.points.push(this.latest_points.shift());
+    // check the potential values at distance head_speed and angel +10, 0, -10 degrees from the pen head
+    let mindist = Infinity;
+    let mindist_dir = random(-this.turning_lookahead, this.turning_lookahead);
+    let n = 20;
+    for (let d = -this.turning_lookahead; d <= this.turning_lookahead; d += this.turning_lookahead*2/n) {
+      let p = { // point to look at
+        x: this.head_pos.x + this.forward_lookahead*cos(this.head_dir + d),
+        y: this.head_pos.y + this.forward_lookahead*sin(this.head_dir + d)
+      };
+
+      let tmp = abs(this.distance_to_closest_point(p, obstacles)-this.desired_dist);
+      if (tmp < mindist) {
+        mindist = tmp;
+        mindist_dir = d;
       }
     }
+    // then go to the distance closer to this.desired_dist
+    this.head_dir += mindist_dir;
+    // update head position
+    this.head_pos.x += this.forwardSpeed * cos(this.head_dir);
+    this.head_pos.y += this.forwardSpeed * sin(this.head_dir);
+    // check if the pen is happy
+    if (mindist > 1) { this.happines -= 1; }
+    if (this.happines <= 0) {
+      if (this.n_teletrasport_alowed < 0) { go = false; }
+      // if not teletrasport the pen to a random position that is far from obstacles and pen trace
+      let found = false;
+      for (let i = 0; i < 100; i++) {
+        this.head_pos = {x: random(20, width-20), y: random(20, height-20)};
+        if (this.distance_to_closest_point(this.head_pos, obstacles) > 10) { found = true; break; }
+      }
+      if (!found) { go = false; }
+      this.head_dir = random(0, 360);
+      this.happines = this.happines_max;
+      this.n_teletrasport_alowed -= 1;
+    }
+    // add new head position to points array
+    this.latest_points.push({x: this.head_pos.x, y: this.head_pos.y});
+    // when this.latest_points has more than 200 points, remove the oldest one and put it in this.points
+    if (this.latest_points.length > 10) {
+      this.points.push(this.latest_points.shift());
+    }
+  }
   
   drawPen() {
     // draw pen drawing
@@ -218,7 +222,7 @@ function setup() {
 }
 
 let go = true;
-let speed_multiplier = 10;
+let speed_multiplier = 20;
 
 function draw() { if (go) {
   background(220);
