@@ -6,7 +6,6 @@ function dot(v1, v2) {
   return v1.x * v2.x + v1.y * v2.y;
 }
 
-
 function find_maxmin(arr) {
   let max = arr[0][0];
   let min = arr[0][0];
@@ -20,14 +19,6 @@ function find_maxmin(arr) {
   return {max: max, min: min};
 }
 
-function potential(point, source){
-  let a = 1;
-  let r = distance(point, source)/20;
-  // return -50*((r-1)**2)*exp(-(r-1)/a)/(a**2)
-  if (r>1 && r<2) { return -1; }
-  else { return 0; }
-}
-
 class SegmentObstacle {
   constructor(p1, p2) {
     this.p1 = p1;
@@ -36,10 +27,12 @@ class SegmentObstacle {
   }
 
   draw() {
+    fill(0);
+    stroke(0);
     line(this.p1.x, this.p1.y, this.p2.x, this.p2.y);
   }
 
-  minDistToSegment(p) {
+  minDist(p) {
     let dot1 = dot({x: p.x - this.p1.x, y: p.y - this.p1.y}, {x: this.p2.x - this.p1.x, y: this.p2.y - this.p1.y});
     if (dot1 <= 0) {
       return distance(p, this.p1);
@@ -53,6 +46,46 @@ class SegmentObstacle {
   }
 }
 
+class CircleObstacle {
+  constructor(center, r) {
+    this.center = center;
+    this.r = r;
+  }
+
+  draw() {
+    noFill();
+    stroke(0);
+    circle(this.center.x, this.center.y, 2*this.r);
+  }
+
+  minDist(p) {
+    return abs(distance(p, this.center) - this.r);
+  }
+}
+
+class TriangleObstacle {
+  constructor(p1, p2, p3) {
+    this.p1 = p1;
+    this.p2 = p2;
+    this.p3 = p3;
+  }
+
+  draw() {
+    noFill();
+    stroke(0);
+    triangle(this.p1.x, this.p1.y, this.p2.x, this.p2.y, this.p3.x, this.p3.y);
+  }
+
+  minDist(p) {
+    let d1 = new SegmentObstacle(this.p1, this.p2).minDist(p);
+    let d2 = new SegmentObstacle(this.p2, this.p3).minDist(p);
+    let d3 = new SegmentObstacle(this.p3, this.p1).minDist(p);
+    return min(d1, d2, d3);
+  }
+}
+
+
+
 class Pen {
   constructor(startingPos, startingDir, forwardSpeed, turning_speed, forward_lookahead, turning_lookahead) {
     this.head_pos = startingPos; // pixels
@@ -61,151 +94,140 @@ class Pen {
     this.forwardSpeed = forwardSpeed; // pixels per frame
     this.turning_speed = turning_speed; // degrees per frame
     
-    this.forward_lookahead = forward_lookahead;
-    this.turning_lookahead = turning_lookahead;
+    this.forward_lookahead = forward_lookahead; // pixels
+    this.turning_lookahead = turning_lookahead; // degrees
+
+    this.desired_dist = 5;
+    this.happines = 100;
+    this.n_teletrasport_alowed = 10;
     
-    this.points = [startingPos];
+    this.points = [];
+    this.latest_points = [];
   }
-
-  updatePen(potential_map) {
-    // check the potential values at distance head_speed and angel +10, 0, -10 degrees from the pen head
-    let pots = [];
-    let n = 5;
-    for (let d = -this.turning_lookahead; d <= this.turning_lookahead; d += this.turning_lookahead*2/n) {
-      let p = { // point to look at
-        x: this.head_pos.x + this.forward_lookahead*cos(this.head_dir + d),
-        y: this.head_pos.y + this.forward_lookahead*sin(this.head_dir + d)
-      };
-      
-      let x = floor(p.x/scale); let y = floor(p.y/scale);
-      if (x >= 0 && x < width/scale && y >= 0 && y < height/scale) {
-        pots.push(potential_map[x][y]);
-      } else { pots.push(Infinity); }
+  
+  distance_to_closest_point(p, obstacles) {
+    // loop over all points in this.points and over all abstacles, and find the minimum distance between anything and p
+    let mindist = Infinity;
+    for (let i = 0; i < this.points.length; i++) {
+      let d = distance(p, this.points[i]);
+      if (d < mindist) { mindist = d; }
     }
-    // then go to the minimum potential value
-    let maxmin = find_maxmin(pots);
-    if (maxmin.min - maxmin.max != 0) {
-      this.head_dir += map(pots.indexOf(min(pots)), 0, n, -this.turning_speed, this.turning_speed);
-    } else {
-      this.head_dir += random(-this.turning_speed, this.turning_speed-2);
+    for (let i = 0; i < obstacles.length; i++) {
+      let d = obstacles[i].minDist(p);
+      if (d < mindist) { mindist = d; }
     }
-    // this.head_dir += map(pots.indexOf(min(pots)), 0, n, -this.turning_speed, this.turning_speed);
-    // update head position
-    this.head_pos.x += this.forwardSpeed * cos(this.head_dir);
-    this.head_pos.y += this.forwardSpeed * sin(this.head_dir);
-    // add new head position to points array
-    this.points.push({x: this.head_pos.x, y: this.head_pos.y});
+    return mindist;
   }
+  
+    updatePen(obstacles) {
+      this.desired_dist = 5 + noise(this.head_pos.x/20, this.head_pos.y/20)*4;
+      print(this.desired_dist);
+      // check the potential values at distance head_speed and angel +10, 0, -10 degrees from the pen head
+      let mindist = Infinity;
+      let mindist_dir = random(-this.turning_lookahead, this.turning_lookahead);
+      let n = 20;
+      for (let d = -this.turning_lookahead; d <= this.turning_lookahead; d += this.turning_lookahead*2/n) {
+        let p = { // point to look at
+          x: this.head_pos.x + this.forward_lookahead*cos(this.head_dir + d),
+          y: this.head_pos.y + this.forward_lookahead*sin(this.head_dir + d)
+        };
 
+        let tmp = abs(this.distance_to_closest_point(p, obstacles)-this.desired_dist);
+        if (tmp < mindist) {
+          mindist = tmp;
+          mindist_dir = d;
+        }
+      }
+      // then go to the distance closer to this.desired_dist
+      this.head_dir += mindist_dir;
+      // update head position
+      this.head_pos.x += this.forwardSpeed * cos(this.head_dir);
+      this.head_pos.y += this.forwardSpeed * sin(this.head_dir);
+      // check if the pen is happy
+      if (mindist > 1) { this.happines -= 1; }
+      if (this.happines <= 0) {
+        if (this.n_teletrasport_alowed > 0) {
+          this.head_pos = {x: random(20, width-20), y: random(20, height-20)};
+          this.head_dir = random(0, 360);
+          this.happines = 100;
+          this.n_teletrasport_alowed -= 1;
+        } else {
+          go = false;
+        }
+      }
+      // add new head position to points array
+      this.latest_points.push({x: this.head_pos.x, y: this.head_pos.y});
+      // when this.latest_points has more than 200 points, remove the oldest one and put it in this.points
+      if (this.latest_points.length > 10) {
+        this.points.push(this.latest_points.shift());
+      }
+    }
+  
   drawPen() {
+    // draw pen drawing
     fill(255, 0, 0);
     stroke(255, 0, 0);
-    // draw pen drawing
-    for (let i = 1; i < this.points.length - 1; i++) {
+    for (let i = 0; i < this.points.length - 1; i++) {
       let p1 = this.points[i];
       let p2 = this.points[i + 1];
-      line(p1.x, p1.y, p2.x, p2.y);
+      if (distance(p1, p2) < 10) { line(p1.x, p1.y, p2.x, p2.y); }
     }
-    // draw head as a triangle
-    push();
-    translate(this.head_pos.x, this.head_pos.y);
-    rotate(this.head_dir);
-    triangle(10, 0, 0, 5, 0, -5);
-    pop();
+    // draw latest points
+    fill(0, 0, 255);
+    stroke(0, 0, 255);
+    for (let i = 1; i < this.latest_points.length-1; i++) {
+      let p1 = this.latest_points[i];
+      let p2 = this.latest_points[i + 1];
+      if (distance(p1, p2) < 10) { line(p1.x, p1.y, p2.x, p2.y); }
+    }
+    // // draw head as a triangle
+    // push();
+    // translate(this.head_pos.x, this.head_pos.y);
+    // rotate(this.head_dir);
+    // triangle(10, 0, 0, 5, 0, -5);
+    // pop();
   }
 }
-
-
-
-
-
-
 
 
 
 let pen; // the pen object
 let obstacles = []; // array of obstacles
-let scale = 5; // scale of the potential map
-let potential_map = []; // 2d array of potential values (one value every scale pixels)
 
 function setup() {
   createCanvas(400, 400);
   angleMode(DEGREES);
-  pen = new Pen({x: 200, y: 200}, 0.0, 1.0, 10.0, 10.0, 40.0);
+  pen = new Pen({x: 190, y: 190}, 0.0, 1.0, 1.0, 4.0, 90.0);
 
-  let obstacle1 = new SegmentObstacle({x: 350, y: 100}, {x: 300, y: 300});
-  let obstacle2 = new SegmentObstacle({x: 100, y: 300}, {x: 300, y: 300});
-  let obstacle3 = new SegmentObstacle({x: 100, y: 50}, {x: 300, y: 100});
-  let obstacle4 = new SegmentObstacle({x: 100, y: 50}, {x: 100, y: 300});
-  let obstacle5 = new SegmentObstacle({x: 50, y: 50},{x: 50, y: 50} );
-  obstacles = [obstacle1, obstacle2, obstacle3, obstacle4, obstacle5];
-  // obstacles = [];
-  
-  // create a empty potential map
-  for (let i = 0; i < width/scale; i++) {
-    potential_map.push([]);
-    for (let j = 0; j < height/scale; j++) {
-      potential_map[i].push(0);
-    }
-  }
-  // fill it from potentials generated by obstacles
-  let obstacle_step_size = 20;
-  for (let i = 0; i < width/scale; i++) {
-    for (let j = 0; j < height/scale; j++) {
-      for (let n = 0; n < obstacles.length; n++) {
-        for (let k = 0; k < obstacle_step_size; k++) {
-        // span obstacle with 10 points
-        let source = {x: map(k, 0, obstacle_step_size, obstacles[n].p1.x, obstacles[n].p2.x), y: map(k, 0, obstacle_step_size, obstacles[n].p1.y, obstacles[n].p2.y)};
-        let p = {x: i*scale, y: j*scale};
-        potential_map[i][j] += potential(p, source);
-       }
-      }
-    }
-  }
+  let border1 = new SegmentObstacle({x: 0, y: 0}, {x: 400, y: 0});
+  let border2 = new SegmentObstacle({x: 400, y: 0}, {x: 400, y: 400});
+  let border3 = new SegmentObstacle({x: 400, y: 400}, {x: 0, y: 400});
+  let border4 = new SegmentObstacle({x: 0, y: 400}, {x: 0, y: 0});
+  obstacles = [border1, border2, border3, border4]
 
-  print(potential_map);
+  // create three small random triangles and a small circle
+  let p1 = {x: random(50, 350), y: random(50, 350)};
+  let tri1 = new TriangleObstacle(p1, {x: p1.x + random(-20, 20), y: p1.y + random(-40, 40)}, {x: p1.x + random(-40, 40), y: p1.y + random(-20, 20)});
+  let p2 = {x: random(50, 350), y: random(50, 350)};
+  let tri2 = new TriangleObstacle(p2, {x: p2.x + random(-20, 20), y: p2.y + random(-40, 40)}, {x: p2.x + random(-40, 40), y: p2.y + random(-20, 20)});
+  let p3 = {x: random(50, 350), y: random(50, 350)};
+  let tri3 = new TriangleObstacle(p3, {x: p3.x + random(-20, 20), y: p3.y + random(-40, 40)}, {x: p3.x + random(-40, 40), y: p3.y + random(-20, 20)});
+  let circle = new CircleObstacle({x: random(50, 350), y: random(50, 350)}, random(10, 30));
+  obstacles.push(tri1, tri2, tri3, circle);
+
 }
 
+let go = true;
+let speed_multiplier = 10;
 
-let n_iters = 1;
-let currenti = 0;
+function draw() { if (go) {
+  background(220);
 
-function draw() {
-  n_iters ++;
-  frameRate(60);
-  // ============ Update
-  // update pen
-  pen.updatePen(potential_map);
-  // // update potential
-  // if (n_iters % 120 == 0) {
-  //   for (let i = 0; i < width/scale; i++) {
-  //     for (let j = 0; j < height/scale; j++) {
-  //       // loop over 1 every ten points of the pen track
-  //       for (let n = currenti; n < pen.points.length; n+=10) {
-  //         let p = {x: i*scale, y: j*scale};
-  //         potential_map[i][j] += potential(p, pen.points[n]);
-  //       }
-  //     }
-  //   }
-  //   print(potential_map);
-  //   currenti = pen.points.length;
-  // }
-  
-  // ============ Draw
-  // draw potential map
-  // find max e min for color mapping
-  let maxmin = find_maxmin(potential_map);
-  // draw potential map
-  noStroke();
-  for (let i = 0; i < width/scale; i++) {
-    for (let j = 0; j < height/scale; j++) {
-      let c = map(potential_map[i][j], maxmin.min, maxmin.max, 0, 255);
-      fill(c);
-      rect(i*scale, j*scale, scale, scale);
-    }
+  for (let i = 0; i < speed_multiplier; i++) {
+    pen.updatePen(obstacles);
   }
-  // draw pen
+
   pen.drawPen();
   // draw obstacles
-  // for (let i = 0; i < obstacles.length; i++) { obstacles[i].draw(); }
-}
+  for (let i = 0; i < obstacles.length; i++) { obstacles[i].draw(); }
+}}
