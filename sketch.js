@@ -1,3 +1,7 @@
+function dot(v1, v2) {
+  return v1.x * v2.x + v1.y * v2.y;
+}
+
 function distance(p1, p2) {
   return sqrt((p1.x - p2.x)**2 + (p1.y - p2.y)**2);
 }
@@ -17,6 +21,33 @@ class CircleObstacle {
   minDist(p) {
     let tmp = distance(p, this.center)-this.r
     return max(0,tmp);
+  }
+}
+
+class SegmentObstacle {
+  constructor(p1, p2) {
+    this.p1 = p1;
+    this.p2 = p2;
+    this.length = distance(p1, p2);
+  }
+
+  draw() {
+    fill(0);
+    stroke(0);
+    line(this.p1.x, this.p1.y, this.p2.x, this.p2.y);
+  }
+
+  minDist(p) {
+    let dot1 = dot({x: p.x - this.p1.x, y: p.y - this.p1.y}, {x: this.p2.x - this.p1.x, y: this.p2.y - this.p1.y});
+    if (dot1 <= 0) {
+      return distance(p, this.p1);
+    }
+    let dot2 = dot({x: p.x - this.p2.x, y: p.y - this.p2.y}, {x: this.p1.x - this.p2.x, y: this.p1.y - this.p2.y});
+    if (dot2 <= 0) {
+      return distance(p, this.p2);
+    }
+    let distToLine = abs((this.p2.x - this.p1.x)*(p.y - this.p1.y) - (this.p2.y - this.p1.y)*(p.x - this.p1.x)) / this.length;
+    return distToLine;
   }
 }
 
