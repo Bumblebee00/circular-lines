@@ -58,31 +58,53 @@ class Pen {
     
     this.points = [];
     this.latest_points = [];
+    
+    // Initialize the 5x5 spatial grid
+    this.grid_size = 10;
+    this.cell_width = width / this.grid_size;
+    this.cell_height = height / this.grid_size;
+    this.grid = Array(this.grid_size).fill().map(() => 
+      Array(this.grid_size).fill().map(() => [])
+    );
+  }
+  
+  // Helper method to determine which grid cell a point belongs to
+  getGridCell(p) {
+    let col = constrain(floor(p.x / this.cell_width), 0, this.grid_size - 1);
+    let row = constrain(floor(p.y / this.cell_height), 0, this.grid_size - 1);
+    return {row, col};
   }
   
   distance_to_closest_point(p, obstacles) {
     if (p.x<0 || p.x>width || p.y<0 || p.y>height){ return 0; }
-    // loop over all points in this.points and over all abstacles, and find the minimum distance between anything and p
+    
     let mindist = Infinity;
-    let d;
-    for (let i = 0; i < this.points.length; i++) {
-    // for (let i = max(0,this.points.length - 10000); i < this.points.length; i++) {
-      d = distance(p, this.points[i]);
-      if (d < mindist) { mindist = d; }
+    
+    // Only check grid cells near the point (current cell + neighbors)
+    let cell = this.getGridCell(p);
+    for (let i = Math.max(0, cell.row - 1); i <= Math.min(this.grid_size - 1, cell.row + 1); i++) {
+      for (let j = Math.max(0, cell.col - 1); j <= Math.min(this.grid_size - 1, cell.col + 1); j++) {
+        // Check all points in this cell
+        for (let k = 0; k < this.grid[i][j].length; k++) {
+          let d = distance(p, this.grid[i][j][k]);
+          if (d < mindist) { mindist = d; }
+        }
+      }
     }
+    
+    // Check obstacles as before
     for (let i = 0; i < obstacles.length; i++) {
       let d = obstacles[i].minDist(p);
       if (d < mindist) { mindist = d; }
     }
+    
     return mindist;
   }
-  
+
   updatePen(obstacles) {
     let dd = this.desired_dist + noise(this.head_pos.x/50, this.head_pos.y/50)*4;
 
-    // sound
-
-    // check the potential values at distance head_speed and angel +10, 0, -10 degrees from the pen head
+    // check the min distances at distance head_speed and angel +10, 0, -10 degrees from the pen head
     let mindist = Infinity;
     let mindist_dir = random(-this.turning_lookahead, this.turning_lookahead);
     let n = 30;
@@ -120,9 +142,15 @@ class Pen {
     }
     // add new head position to points array
     this.latest_points.push({x: this.head_pos.x, y: this.head_pos.y});
+    
     // when this.latest_points has more than 10 points, remove the oldest one and put it in this.points
     if (this.latest_points.length > 10) {
-      this.points.push(this.latest_points.shift());
+      let point = this.latest_points.shift();
+      this.points.push(point);
+      
+      // Add the point to the appropriate grid cell
+      let cell = this.getGridCell(point);
+      this.grid[cell.row][cell.col].push(point);
     }
   }
   
@@ -163,7 +191,7 @@ function setup() {
 }
 
 let go = true;
-let speed_multiplier = 20;
+let speed_multiplier = 50;
 
 function draw() { if (go) {
   for (let i = 0; i < speed_multiplier; i++) {
