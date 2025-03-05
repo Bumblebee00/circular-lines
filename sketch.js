@@ -198,22 +198,24 @@ class Pen {
 
 let pen; // the pen object
 let obstacles = []; // array of obstacles
+let W = 700;
+let H = 700;
 
 function setup() {
-  createCanvas(400, 400);
+  createCanvas(W, H);
   angleMode(DEGREES);
   background(255);
-  pen = new Pen({x: 190, y: 190}, 0.0);
+  pen = new Pen({x: W/2, y: H/2}, 0.0);
 
   if(random(0,1)>0.5){
-    let p = {x: random(50, 350), y: random(50, 350)};
+    let p = {x: random(50, W-50), y: random(50, H-50)};
     let p2 = {x: p.x + random(30, 60), y: p.y + random(-60, -30)};
     let p3 = {x: p.x + random(30, 60), y: p.y + random(60, 30)};
     let bigTriangle = new TriangleObstacle(p, p2, p3);
     obstacles.push(bigTriangle);
   }
   if(random(0,1)>0.5){
-    let c = new CircleObstacle({x: random(50, 350), y: random(50, 350)}, random(30, 50));
+    let c = new CircleObstacle({x: random(50, W-50), y: random(50, H-50)}, random(30, 50));
     obstacles.push(c);
   }
 }
