@@ -90,8 +90,8 @@ class Pen {
     this.points = [];
     this.latest_points = [];
     
-    // Initialize the 5x5 spatial grid
-    this.grid_size = 10;
+    // points are inserted in a grid. each cell is a array. so the process to check the distance to closest point is muchhhh faster
+    this.grid_size = 70;
     this.cell_width = width / this.grid_size;
     this.cell_height = height / this.grid_size;
     this.grid = Array(this.grid_size).fill().map(() => 
@@ -107,11 +107,9 @@ class Pen {
   }
   
   distance_to_closest_point(p, obstacles) {
-    if (p.x<0 || p.x>width || p.y<0 || p.y>height){ return 0; }
-    
     let mindist = Infinity;
     
-    // Only check grid cells near the point (current cell + neighbors)
+    // Only check grid cells near the point (current cell + side neighbors + diagonal neighbors)
     let cell = this.getGridCell(p);
     for (let i = Math.max(0, cell.row - 1); i <= Math.min(this.grid_size - 1, cell.row + 1); i++) {
       for (let j = Math.max(0, cell.col - 1); j <= Math.min(this.grid_size - 1, cell.col + 1); j++) {
@@ -123,7 +121,6 @@ class Pen {
       }
     }
     
-    // Check obstacles as before
     for (let i = 0; i < obstacles.length; i++) {
       let d = obstacles[i].minDist(p);
       if (d < mindist) { mindist = d; }
@@ -222,7 +219,7 @@ function setup() {
 }
 
 let go = true;
-let speed_multiplier = 50;
+let speed_multiplier = 300;
 
 function draw() { if (go) {
   for (let i = 0; i < speed_multiplier; i++) {
