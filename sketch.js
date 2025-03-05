@@ -225,6 +225,12 @@ function setup() {
     let c = new CircleObstacle({x: random(50, W-50), y: random(50, H-50)}, random(30, 50));
     obstacles.push(c);
   }
+  if(random(0,1)>0.5){
+    let c = new CircleObstacle({x: random(100, W-100), y: random(100, H-100)}, random(10, 30));
+    obstacles.push(c);
+    c = new CircleObstacle({x: random(100, W-100), y: random(100, H-100)}, random(10, 30));
+    obstacles.push(c);
+  }
 }
 
 let go = true;
