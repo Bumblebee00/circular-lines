@@ -184,7 +184,14 @@ class Pen {
   
   drawPen() {
     stroke(255,0,0);
-    if (this.points.length < speed_multiplier+1) { return; }
+    if (this.points.length <= speed_multiplier) {
+      for (let i = 1; i < this.points.length; i++) {
+        let p1 = this.points[i-1];
+        let p22 = this.points[i];
+        if (distance(p1, p22) < 10) { line(p1.x, p1.y, p22.x, p22.y); }
+      }
+      return; 
+    }
     for (let i = 0; i < speed_multiplier; i++) {
       let p1 = this.points[this.points.length - i - 1];
       let p2 = this.points[this.points.length - i - 2];
